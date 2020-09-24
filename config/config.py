@@ -20,7 +20,7 @@ class Config(object):
 
     lfw_root = '/data/Datasets/lfw/lfw-align-128'
     lfw_test_list = '/data/Datasets/lfw/lfw_test_pair.txt'
-
+    
     checkpoints_path = 'checkpoints'
     load_model_path = 'models/resnet18.pth'
     test_model_path = 'checkpoints/resnet18_110.pth'

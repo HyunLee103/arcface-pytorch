@@ -17,6 +17,7 @@ from torch.optim.lr_scheduler import StepLR
 from test import *
 
 
+
 def save_model(model, save_path, name, iter_cnt):
     save_name = os.path.join(save_path, name + '_' + str(iter_cnt) + '.pth')
     torch.save(model.state_dict(), save_name)

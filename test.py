@@ -11,8 +11,57 @@ from models import *
 import torch
 import numpy as np
 import time
-from config import Config
+# from config import Config
 from torch.nn import DataParallel
+
+class Config(object):
+    env = 'default'
+    backbone = 'resnet18'
+    classify = 'softmax'
+    num_classes = 13938
+    metric = 'arc_margin'
+    easy_margin = False
+    use_se = False
+    loss = 'focal_loss'
+
+    display = False
+    finetune = False
+
+    train_root = '/data/Datasets/webface/CASIA-maxpy-clean-crop-144/'
+    train_list = '/data/Datasets/webface/train_data_13938.txt'
+    val_list = '/data/Datasets/webface/val_data_13938.txt'
+
+    test_root = '/data1/Datasets/anti-spoofing/test/data_align_256'
+    test_list = 'test.txt'
+
+    lfw_root = '/mnt/hyun/face/arcface-pytorch/data/Datasets/lfw/lfw-align-128'
+    lfw_test_list = '/mnt/hyun/face/arcface-pytorch/data/Datasets/lfw/lfw_test_pair.txt'
+
+    checkpoints_path = 'checkpoints'
+    load_model_path = 'models/resnet18.pth'
+    test_model_path = 'checkpoints/resnet18_110.pth'
+    save_interval = 10
+
+    train_batch_size = 16  # batch size
+    test_batch_size = 60
+
+    input_shape = (1, 128, 128)
+
+    optimizer = 'sgd'
+
+    use_gpu = True  # use GPU or not
+    gpu_id = '0, 1'
+    num_workers = 4  # how many workers for loading data
+    print_freq = 100  # print info every N batch
+
+    debug_file = '/tmp/debug'  # if os.path.exists(debug_file): enter ipdb
+    result_file = 'result.csv'
+
+    max_epoch = 50
+    lr = 1e-1  # initial learning rate
+    lr_step = 10
+    lr_decay = 0.95  # when val_loss increase, lr = lr*lr_decay
+    weight_decay = 5e-4
 
 
 def get_lfw_list(pair_list):
@@ -51,22 +100,22 @@ def get_featurs(model, test_list, batch_size=10):
         image = load_image(img_path)
         if image is None:
             print('read {} error'.format(img_path))
-
         if images is None:
             images = image
         else:
             images = np.concatenate((images, image), axis=0)
-
+            # print(images.shape)
         if images.shape[0] % batch_size == 0 or i == len(test_list) - 1:
             cnt += 1
 
             data = torch.from_numpy(images)
+            print(data.shape)
             data = data.to(torch.device("cuda"))
             output = model(data)
-            output = output.data.cpu().numpy()
-
+            output = output.data.cpu().numpy() # output -> (60,512)
             fe_1 = output[::2]
             fe_2 = output[1::2]
+            # print(fe_1.shape, fe_2.shape)
             feature = np.hstack((fe_1, fe_2))
             # print(feature.shape)
 
@@ -92,7 +141,10 @@ def get_feature_dict(test_list, features):
     fe_dict = {}
     for i, each in enumerate(test_list):
         # key = each.split('/')[1]
-        fe_dict[each] = features[i]
+        try:
+            fe_dict[each] = features[i]
+        except:
+            pass
     return fe_dict
 
 
@@ -124,13 +176,16 @@ def test_performance(fe_dict, pair_list):
     labels = []
     for pair in pairs:
         splits = pair.split()
-        fe_1 = fe_dict[splits[0]]
-        fe_2 = fe_dict[splits[1]]
-        label = int(splits[2])
-        sim = cosin_metric(fe_1, fe_2)
+        try:
+            fe_1 = fe_dict[splits[0]]
+            fe_2 = fe_dict[splits[1]]
+            label = int(splits[2])
+            sim = cosin_metric(fe_1, fe_2)
 
-        sims.append(sim)
-        labels.append(label)
+            sims.append(sim)
+            labels.append(label)
+        except:
+            pass
 
     acc, th = cal_accuracy(sims, labels)
     return acc, th
@@ -139,13 +194,22 @@ def test_performance(fe_dict, pair_list):
 def lfw_test(model, img_paths, identity_list, compair_list, batch_size):
     s = time.time()
     features, cnt = get_featurs(model, img_paths, batch_size=batch_size)
-    print(features.shape)
+    """
+    features -> (5969, 1024)
+    """
     t = time.time() - s
     print('total time is {}, average time is {}'.format(t, t / cnt))
+
     fe_dict = get_feature_dict(identity_list, features)
+    """
+    {key : identity_path, value : feature vector}
+    """
     acc, th = test_performance(fe_dict, compair_list)
     print('lfw face verification accuracy: ', acc, 'threshold: ', th)
     return acc
+
+
+
 
 
 if __name__ == '__main__':
@@ -164,11 +228,68 @@ if __name__ == '__main__':
     model.to(torch.device("cuda"))
 
     identity_list = get_lfw_list(opt.lfw_test_list)
-    img_paths = [os.path.join(opt.lfw_root, each) for each in identity_list]
-
+    print(identity_list[:5])
+    img_paths = [os.path.join(opt.lfw_root, each) for each in identity_list_new]
+    print(img_paths[:5])
     model.eval()
-    lfw_test(model, img_paths, identity_list, opt.lfw_test_list, opt.test_batch_size)
+    lfw_test(model, img_paths, identity_list_new, opt.lfw_test_list, opt.test_batch_size)
 
 
 
 
+
+
+
+
+identity_list
+
+
+
+
+
+
+model
+identity_list
+len(identity_list)
+img_paths
+
+k = set(list_dir) & set(identity_list)
+
+
+identity_list_new = list(k)
+
+list_dir = []
+for (path, dir, files) in os.walk(opt.lfw_root):
+    # print(path[63:])
+    for filename in files:
+        list_dir.append(os.path.join(path[63:],filename))
+
+
+len(pairs)
+pairs[5000:5001]
+
+def test_performance(fe_dict, pair_list):
+    with open(opt.lfw_test_list, 'r') as fd:
+        pairs = fd.readlines()
+
+    sims = []
+    labels = []
+    for pair in pairs:
+        print(pair)
+        break
+        splits = pair.split()
+        try:
+            fe_1 = fe_dict[splits[0]]
+            fe_2 = fe_dict[splits[1]]
+            label = int(splits[2])
+            sim = cosin_metric(fe_1, fe_2)
+
+            sims.append(sim)
+            labels.append(label)
+        except:
+            pass
+
+    acc, th = cal_accuracy(sims, labels)
+    return acc, th
+
+    labels
